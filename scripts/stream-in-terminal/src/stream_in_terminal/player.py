@@ -1,4 +1,9 @@
-"""Playback loop: resolve stream, decode frames, render pixel art + chat."""
+"""Playback loop: resolve the stream with streamkit, render pixel art + chat.
+
+Everything upstream of the drawing — Twitch resolution, the ffmpeg decode pipe, the Grid, the
+terminal renderer, the chat client, the ffmpeg lookup — comes from the ``streamkit`` library. What is
+local to this medium is the player itself: the layout, the status line, the chat pane and recording.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +12,9 @@ import sys
 import time
 from dataclasses import dataclass
 
-from stream_in_terminal.render import (
+from streamkit.chat import TwitchChat, format_chat_block, prepare_chat_rows
+from streamkit.ffmpeg import find_ffmpeg
+from streamkit.render import (
     RenderMode,
     pixel_dimensions,
     render_frame,
@@ -15,11 +22,11 @@ from stream_in_terminal.render import (
     resolve_charset,
     supports_truecolor,
 )
-from stream_in_terminal.chat import TwitchChat, format_chat_block, prepare_chat_rows
-from stream_in_terminal.ffmpeg_pipe import FrameSource, open_rgb_pipe
-from stream_in_terminal.record import Mp4Recorder, default_record_path
-from stream_in_terminal.record_overlay import compose_record_frame, record_output_size
-from stream_in_terminal.stream import StreamResolveError, require_ffmpeg, resolve_stream_url
+from streamkit.sources import Source, TwitchSource
+from streamkit.sources.twitch import StreamResolveError
+
+from .record import Mp4Recorder, default_record_path
+from .record_overlay import compose_record_frame, record_output_size
 
 HIDE_CURSOR = "\x1b[?25l"
 SHOW_CURSOR = "\x1b[?25h"
@@ -196,25 +203,8 @@ def _render_frame(
     out.flush()
 
 
-def _drain_stderr(src: FrameSource) -> bytes:
-    if not src.process.stderr:
-        return b""
-    try:
-        # Non-blocking-ish: only read after process has exited (caller should ensure).
-        return src.process.stderr.read() or b""
-    except OSError:
-        return b""
-
-
 def play(options: PlayerOptions) -> int:
     """Run the player until EOF, stream end, or KeyboardInterrupt. Returns exit code."""
-    try:
-        ffmpeg = require_ffmpeg()
-        channel, stream_url = resolve_stream_url(options.channel_or_url, options.quality)
-    except StreamResolveError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 1
-
     chat_lines = max(1, options.chat_lines)
     charset = resolve_charset(options.chars)
     if options.mode == RenderMode.ASCII:
@@ -242,12 +232,24 @@ def play(options: PlayerOptions) -> int:
     chat_client: TwitchChat | None = None
     prev_layout: tuple[int, int, int] | None = None
     recorder: Mp4Recorder | None = None
+    source: Source | None = None
     record_layout: tuple[int, int] | None = None
     record_terminal_cols = 0
     record_chat_lines = 0
     record_scale = max(1, options.record_scale)
 
     try:
+        ffmpeg = find_ffmpeg()  # fail early, with advice, if ffmpeg is missing or broken
+        source = TwitchSource(
+            options.channel_or_url,
+            width=decode_w,
+            height=decode_h,
+            fps=fps,
+            quality=options.quality,
+        )
+        source.open()  # resolves the channel and starts ffmpeg; raises StreamResolveError
+        channel = source.channel
+
         _enable_windows_ansi()
         if options.use_alt_screen and out.isatty():
             out.write(ALT_ENTER)
@@ -291,96 +293,87 @@ def play(options: PlayerOptions) -> int:
             )
 
         frame_interval = 1.0 / fps
-        with open_rgb_pipe(
-            stream_url, decode_w, decode_h, fps, ffmpeg_path=ffmpeg
-        ) as src:
-            next_deadline = time.perf_counter()
-            for rgb in src.frames_interruptible():
-                pixel_w, pixel_h, video_rows = _layout(
-                    options.width, options.chat, chat_lines, options.mode
+        next_deadline = time.perf_counter()
+        for grid in source.frames():
+            rgb = grid.rgb_bytes
+            pixel_w, pixel_h, video_rows = _layout(
+                options.width, options.chat, chat_lines, options.mode
+            )
+            terminal_cols, _ = shutil.get_terminal_size(fallback=(80, 24))
+            if options.width is not None:
+                terminal_cols = max(2, min(terminal_cols, options.width))
+
+            # Keep display dimensions locked to the recording canvas so a
+            # window resize cannot spike CPU / block the ffmpeg pipe.
+            if record_layout is not None:
+                pixel_w, pixel_h = record_layout
+                terminal_cols = record_terminal_cols
+                video_rows = (
+                    pixel_h // 2 if options.mode == RenderMode.COMPACT else pixel_h
                 )
-                terminal_cols, _ = shutil.get_terminal_size(fallback=(80, 24))
-                if options.width is not None:
-                    terminal_cols = max(2, min(terminal_cols, options.width))
 
-                # Keep display dimensions locked to the recording canvas so a
-                # window resize cannot spike CPU / block the ffmpeg pipe.
-                if record_layout is not None:
-                    pixel_w, pixel_h = record_layout
-                    terminal_cols = record_terminal_cols
-                    video_rows = (
-                        pixel_h // 2
-                        if options.mode == RenderMode.COMPACT
-                        else pixel_h
-                    )
+            if prev_layout is not None and (pixel_w, pixel_h, video_rows) != prev_layout:
+                # Full clear once when the grid changes; avoid blanking every frame.
+                out.write(CLEAR_SCREEN)
+                out.flush()
+                next_deadline = time.perf_counter()
+            prev_layout = (pixel_w, pixel_h, video_rows)
 
-                if prev_layout is not None and (pixel_w, pixel_h, video_rows) != prev_layout:
-                    # Full clear once when the grid changes; avoid blanking every frame.
-                    out.write(CLEAR_SCREEN)
-                    out.flush()
-                    next_deadline = time.perf_counter()
-                prev_layout = (pixel_w, pixel_h, video_rows)
+            frames_seen += 1
+            now = time.perf_counter()
+            if now < next_deadline:
+                time.sleep(next_deadline - now)
+            next_deadline = time.perf_counter() + frame_interval
 
-                frames_seen += 1
-                now = time.perf_counter()
-                if now < next_deadline:
-                    time.sleep(next_deadline - now)
-                next_deadline = time.perf_counter() + frame_interval
-
-                view = resize_rgb(rgb, decode_w, decode_h, pixel_w, pixel_h)
-                if recorder is not None and record_layout is not None:
-                    rec_w, rec_h = record_layout
-                    chat_rows = []
-                    if chat_client is not None and record_chat_lines > 0:
-                        chat_rows = prepare_chat_rows(
-                            chat_client.latest(),
-                            record_terminal_cols,
-                            record_chat_lines,
-                            color=use_color,
-                        )
-                    status = _build_status_line(
-                        channel,
-                        options.mode,
-                        rec_w,
-                        rec_h,
-                        fps,
+            view = resize_rgb(rgb, decode_w, decode_h, pixel_w, pixel_h)
+            if recorder is not None and record_layout is not None:
+                rec_w, rec_h = record_layout
+                chat_rows = []
+                if chat_client is not None and record_chat_lines > 0:
+                    chat_rows = prepare_chat_rows(
+                        chat_client.latest(),
                         record_terminal_cols,
-                        chat_client,
+                        record_chat_lines,
+                        color=use_color,
                     )
-                    frame = compose_record_frame(
-                        view,
-                        rec_w,
-                        rec_h,
-                        scale=record_scale,
-                        text_cols=record_terminal_cols,
-                        mode=options.mode,
-                        status=status,
-                        chat_rows=chat_rows,
-                        chat_lines=record_chat_lines,
-                    )
-                    recorder.write_frame(frame)
-                _render_frame(
-                    out,
-                    rgb=view,
-                    width=pixel_w,
-                    height=pixel_h,
-                    terminal_cols=terminal_cols,
-                    mode=options.mode,
-                    charset=charset,
-                    use_color=use_color,
-                    use_truecolor=use_truecolor,
-                    channel=channel,
-                    fps=fps,
-                    chat_client=chat_client,
-                    chat_lines=chat_lines,
+                status = _build_status_line(
+                    channel,
+                    options.mode,
+                    rec_w,
+                    rec_h,
+                    fps,
+                    record_terminal_cols,
+                    chat_client,
                 )
+                frame = compose_record_frame(
+                    view,
+                    rec_w,
+                    rec_h,
+                    scale=record_scale,
+                    text_cols=record_terminal_cols,
+                    mode=options.mode,
+                    status=status,
+                    chat_rows=chat_rows,
+                    chat_lines=record_chat_lines,
+                )
+                recorder.write_frame(frame)
+            _render_frame(
+                out,
+                rgb=view,
+                width=pixel_w,
+                height=pixel_h,
+                terminal_cols=terminal_cols,
+                mode=options.mode,
+                charset=charset,
+                use_color=use_color,
+                use_truecolor=use_truecolor,
+                channel=channel,
+                fps=fps,
+                chat_client=chat_client,
+                chat_lines=chat_lines,
+            )
 
-                if src.process.poll() is not None:
-                    # Allow draining remaining queued frames; stop if process died
-                    # and queue is about to end — frames_interruptible handles EOF.
-                    pass
-
-            ffmpeg_err = _drain_stderr(src)
+        ffmpeg_err = source.stderr()
 
         if frames_seen == 0:
             msg = ffmpeg_err.decode("utf-8", errors="replace").strip()
@@ -417,6 +410,8 @@ def play(options: PlayerOptions) -> int:
             recorder.close()
         if chat_client is not None:
             chat_client.stop()
+        if source is not None:
+            source.close()
         if out.isatty():
             if wrap_disabled:
                 out.write(WRAP_ON)

@@ -1,6 +1,7 @@
-"""The terminal sink: half-block / colored-block / ASCII pixel art, exactly as stream-in-terminal.
+"""The terminal sink: half-block / colored-block / ASCII pixel art.
 
-Kept byte-identical to the historical renderer on purpose — see tests/test_ansi_regression.py.
+The renderer it draws with (:mod:`streamkit.render.terminal`) is byte-identical to the renderer the
+original live-in-terminal project used — ``tests/test_render_golden.py`` pins that output by hash.
 """
 
 from __future__ import annotations

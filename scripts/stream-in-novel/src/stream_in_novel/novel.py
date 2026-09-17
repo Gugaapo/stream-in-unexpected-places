@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .grid import Grid
+from streamkit.grid import Grid
 
 STYLES = ("dumb", "novel", "nature", "noir")
 LANGS = ("pt-BR", "en", "auto")

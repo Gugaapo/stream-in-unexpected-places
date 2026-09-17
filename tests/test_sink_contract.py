@@ -18,7 +18,7 @@ from streamkit.sources.pattern import PatternSource  # noqa: E402
 
 class TestRegistry(unittest.TestCase):
     def test_builtin_sinks_registered(self) -> None:
-        for name in ("ansi", "ppm_seq", "novel", "novel_txt"):
+        for name in ("ansi", "ppm_seq"):
             self.assertIn(name, registered_sinks())
 
     def test_unknown_sink_lists_the_alternatives(self) -> None:

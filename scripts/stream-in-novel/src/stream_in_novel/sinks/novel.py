@@ -19,8 +19,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, TextIO
 
-from ..chat import TwitchChat, format_chat_block, prepare_chat_rows
-from ..describe import (
+from streamkit.chat import TwitchChat, format_chat_block, prepare_chat_rows
+from streamkit.describe import (
     DEFAULT_BASE_URL,
     DEFAULT_MODEL,
     DescribeError,
@@ -30,10 +30,11 @@ from ..describe import (
     ScriptedDescriber,
     resolve_api_key,
 )
-from ..grid import Grid
+from streamkit.grid import Grid
+from streamkit.render.png import png_bytes
+from streamkit.sink import register
+
 from ..novel import StoryState, build_prompt, should_describe
-from ..render.png import png_bytes
-from ..sink import register
 
 ALT_ENTER = "\x1b[?1049h"
 ALT_LEAVE = "\x1b[?1049l"

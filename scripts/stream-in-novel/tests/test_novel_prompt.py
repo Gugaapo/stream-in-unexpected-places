@@ -10,7 +10,7 @@ SRC = pathlib.Path(__file__).resolve().parents[1] / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from streamkit.novel import StoryState, build_prompt, is_streamer_user  # noqa: E402
+from stream_in_novel.novel import StoryState, build_prompt, is_streamer_user  # noqa: E402
 
 
 class TestNovelPrompt(unittest.TestCase):

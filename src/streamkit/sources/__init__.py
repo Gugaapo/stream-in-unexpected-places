@@ -4,6 +4,7 @@ Spec strings accepted by :func:`build_source`:
 
     pattern:bars | pattern:square | pattern:sweep | pattern:noise   (no ffmpeg, deterministic)
     file:/path/to/video.mp4                                        (ffmpeg, local file)
+    url:https://...m3u8                                            (ffmpeg, direct media URL)
     twitch:<channel> | <channel> | https://twitch.tv/<channel>     (streamlink/yt-dlp + ffmpeg)
 """
 
@@ -14,7 +15,20 @@ from typing import Iterator, Protocol, runtime_checkable
 from ..grid import Grid
 from .pattern import PATTERN_NAMES, PatternSource
 
-__all__ = ["PATTERN_NAMES", "PatternSource", "Source", "build_source"]
+# Concrete sources are exported so a medium can drive one directly (its own player loop) instead of
+# going through the ``build_source`` spec string.
+from .live import FileSource, TwitchSource, UrlSource  # noqa: E402
+
+__all__ = [
+    "FileSource",
+    "PATTERN_NAMES",
+    "PatternSource",
+    "Source",
+    "TwitchSource",
+    "UrlSource",
+    "build_source",
+    "chat_channel",
+]
 
 
 @runtime_checkable
@@ -76,3 +90,15 @@ def build_source(
 
     return TwitchSource(text, width=width, height=height, fps=fps, quality=quality,
                         ffmpeg_path=ffmpeg_path)
+
+
+def chat_channel(source: Source) -> str | None:
+    """The Twitch channel a source reads from, if it is a Twitch source.
+
+    ``None`` for ``pattern:`` / ``file:`` / ``url:`` sources. Mediums that display or narrate chat
+    use this instead of parsing the source spec themselves.
+    """
+    channel = getattr(source, "channel", None)
+    if isinstance(channel, str) and channel.strip():
+        return channel.strip().lower()
+    return None

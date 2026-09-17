@@ -15,7 +15,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from streamkit.describe import ScriptedDescriber  # noqa: E402
-from streamkit.sinks.novel import ALT_ENTER, ALT_LEAVE, HIDE_CURSOR, SHOW_CURSOR, NovelAnsiSink, NovelTxtSink  # noqa: E402
+from stream_in_novel.sinks.novel import ALT_ENTER, ALT_LEAVE, HIDE_CURSOR, SHOW_CURSOR, NovelAnsiSink, NovelTxtSink  # noqa: E402
 from streamkit.sources.pattern import PatternSource  # noqa: E402
 
 

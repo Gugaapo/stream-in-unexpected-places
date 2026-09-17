@@ -2,6 +2,15 @@
 
 > Kept as the build record of this medium, written while the shared core still lived in a larger
 > scratch monorepo. Everything the novel sink needs is in this repo already.
+>
+> **Where those files live now (2026-09-17, after the library split):** the generic pieces this brief
+> calls "the core" moved to the repository root as the `streamkit` library —
+> `src/streamkit/render/png.py`, `src/streamkit/describe.py`, `src/streamkit/grid.py`,
+> `src/streamkit/chat.py`, `src/streamkit/sources/`, `src/streamkit/sink.py`, plus the shared run loop
+> (`streamkit/pipeline.py`) and CLI helpers (`streamkit/cli.py`). The medium's own pieces live here:
+> `src/stream_in_novel/novel.py` (was `src/streamkit/novel.py`) and
+> `src/stream_in_novel/sinks/novel.py` (was `src/streamkit/sinks/novel.py`). The command in the tasks
+> below, `python -m streamkit …`, is now `stream-in-novel …` (or `python -m stream_in_novel`).
 
 Run it:
 

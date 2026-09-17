@@ -5,9 +5,10 @@ from __future__ import annotations
 import base64
 import zlib
 
-from stream_in_terminal.chat import ChatRow
-from stream_in_terminal.record import upscale_rgb
-from stream_in_terminal.render import RenderMode
+from streamkit.chat import ChatRow
+from streamkit.render import RenderMode
+
+from .record import upscale_rgb
 
 # Public-domain 8x8 VGA font (font8x8_basic, Daniel Hepper / IBM VGA).
 _FONT_BLOB = (

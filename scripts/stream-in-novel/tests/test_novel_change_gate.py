@@ -15,8 +15,8 @@ if str(SRC) not in sys.path:
 
 from streamkit.describe import ScriptedDescriber  # noqa: E402
 from streamkit.grid import Grid  # noqa: E402
-from streamkit.novel import should_describe  # noqa: E402
-from streamkit.sinks.novel import NovelTxtSink  # noqa: E402
+from stream_in_novel.novel import should_describe  # noqa: E402
+from stream_in_novel.sinks.novel import NovelTxtSink  # noqa: E402
 from streamkit.sources.pattern import PatternSource  # noqa: E402
 
 

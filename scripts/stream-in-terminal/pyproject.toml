@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "stream-in-terminal"
 version = "0.1.0"
-description = "Watch live Twitch streams as terminal pixel art"
+description = "Watch live Twitch streams as terminal pixel art (a streamkit medium with a player)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -16,6 +16,11 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Topic :: Multimedia :: Video",
 ]
+# streamkit (this repository's root library) is deliberately NOT a PyPI dependency: the name on PyPI
+# belongs to an unrelated project. Install the library from the repository root first:
+#   python -m pip install -e ../..      # streamkit
+#   python -m pip install -e .          # this medium
+dependencies = []
 
 [project.scripts]
 stream-in-terminal = "stream_in_terminal.__main__:main"

@@ -3,17 +3,22 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "streamkit"
+name = "stream-in-novel"
 version = "0.1.0"
-description = "Play a live Twitch stream into an unexpected medium: a vision model narrates it as prose."
+description = "The stream narrated as prose: a streamkit medium (vision model + Twitch chat -> a novel)."
+readme = "README.md"
 requires-python = ">=3.10"
+# streamkit (this repository's root library) is deliberately NOT a PyPI dependency: the name on PyPI
+# belongs to an unrelated project. Install the library from the repository root first:
+#   python -m pip install -e ../..      # streamkit
+#   python -m pip install -e .          # this medium
 dependencies = ["numpy>=1.24"]
 
 [project.optional-dependencies]
 test = ["pytest>=7"]
 
 [project.scripts]
-streamkit = "streamkit.cli:main"
+stream-in-novel = "stream_in_novel.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

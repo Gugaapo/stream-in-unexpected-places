@@ -79,8 +79,17 @@ class TestCliSmoke(unittest.TestCase):
     def test_list_sinks(self) -> None:
         proc = run_cli(["--list-sinks"], cwd=REPO)
         self.assertEqual(proc.returncode, 0)
-        for name in ("ansi", "ppm_seq", "novel", "novel_txt"):
+        for name in ("ansi", "ppm_seq"):
             self.assertIn(name, proc.stdout)
+
+    def test_bad_sink_fails_cleanly(self) -> None:
+        proc = run_cli(
+            ["--source", "pattern:bars", "--size", "8x8", "--sink", "hologram"],
+            cwd=REPO,
+        )
+        self.assertEqual(proc.returncode, 2, proc.stderr)
+        self.assertIn("unknown sink", proc.stderr)
+        self.assertIn("ansi", proc.stderr)  # the error lists what is available
 
     def test_bad_source_spec_fails_cleanly(self) -> None:
         proc = run_cli(

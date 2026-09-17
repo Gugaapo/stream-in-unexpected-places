@@ -1,4 +1,4 @@
-"""``python -m stream_in_terminal`` entry point."""
+"""``python -m stream_in_novel`` entry point."""
 
 from __future__ import annotations
 
