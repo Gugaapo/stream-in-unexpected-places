@@ -19,7 +19,7 @@ class TestNovelPrompt(unittest.TestCase):
         for p in ("P1 old", "P2", "P3", "P4 newest-but-one", "P5 newest"):
             state.add(p)
         chat = [(f"user{i}", f"line{i}") for i in range(10)]
-        system, user = build_prompt(state, chat, "novel", "pt-BR", "gaules")
+        system, user = build_prompt(state, chat, "novel", "pt-BR", "omeiaum")
         self.assertIn("P3", user)
         self.assertIn("P4 newest-but-one", user)
         self.assertIn("P5 newest", user)
@@ -33,7 +33,7 @@ class TestNovelPrompt(unittest.TestCase):
         self.assertIn("line9", user)
         self.assertIn("Brazilian Portuguese", system)
         self.assertIn("literary novel", system.lower())
-        self.assertIn("gaules", system)
+        self.assertIn("omeiaum", system)
         self.assertIn("anti-hallucination", system.lower())
         self.assertIn("viewer count", system.lower())
         self.assertIn("omit it entirely", system.lower())

@@ -1,4 +1,4 @@
-"""The terminal sink: half-block / colored-block / ASCII pixel art, exactly as live-in-terminal.
+"""The terminal sink: half-block / colored-block / ASCII pixel art, exactly as stream-in-terminal.
 
 Kept byte-identical to the historical renderer on purpose — see tests/test_ansi_regression.py.
 """

@@ -1,6 +1,6 @@
 """Live sources: a real Twitch stream, or a local video file, decoded through ffmpeg.
 
-Both wrap the verbatim-port ``ffmpeg_source`` module (the proven live-in-terminal pipe reader,
+Both wrap the verbatim-port ``ffmpeg_source`` module (the proven stream-in-terminal pipe reader,
 which already handles Windows stdin/stdout buffering and interruptible reads).
 """
 

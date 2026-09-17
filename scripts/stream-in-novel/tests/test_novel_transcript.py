@@ -28,7 +28,7 @@ class TestNovelTranscript(unittest.TestCase):
         ]
         describer = ScriptedDescriber(paras, sleep=0.0)
         with tempfile.TemporaryDirectory() as tmp:
-            out = pathlib.Path(tmp) / "gaules.md"
+            out = pathlib.Path(tmp) / "omeiaum.md"
             stdout = io.StringIO()
             sink = NovelTxtSink(
                 interval=0.0,
@@ -36,7 +36,7 @@ class TestNovelTranscript(unittest.TestCase):
                 describer=describer,
                 out_path=out,
                 no_chat=True,
-                label="gaules",
+                label="omeiaum",
                 style="noir",
                 lang="en",
                 stream=stdout,
@@ -48,7 +48,7 @@ class TestNovelTranscript(unittest.TestCase):
                 time.sleep(0.05)
             sink.close()
             text = out.read_text(encoding="utf-8")
-            self.assertIn("# novel - gaules", text)
+            self.assertIn("# novel - omeiaum", text)
             self.assertIn("style: noir", text)
             for p in paras:
                 self.assertIn(p, text)
@@ -64,7 +64,7 @@ class TestNovelTranscript(unittest.TestCase):
                 describer=describer2,
                 out_path=out,
                 no_chat=True,
-                label="gaules",
+                label="omeiaum",
                 stream=io.StringIO(),
             )
             sink2.open(32, 18)

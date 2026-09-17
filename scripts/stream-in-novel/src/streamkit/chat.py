@@ -1,4 +1,4 @@
-"""Twitch chat via anonymous IRC (justinfan) — ported from live-in-terminal for P101.
+"""Twitch chat via anonymous IRC (justinfan) — ported from stream-in-terminal for P101.
 
 No OAuth required. Offline / non-Twitch runs leave the buffer empty.
 """
@@ -22,7 +22,7 @@ _PRIVMSG_RE = re.compile(
     r"PRIVMSG\s+#\S+\s+:(?P<msg>.*)$"
 )
 
-# Distinct fallback hues when Twitch sends no user color (same as live-in-terminal).
+# Distinct fallback hues when Twitch sends no user color (same as stream-in-terminal).
 _FALLBACK_RGB: tuple[tuple[int, int, int], ...] = (
     (255, 99, 71),
     (255, 165, 0),

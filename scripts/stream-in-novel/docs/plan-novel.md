@@ -13,7 +13,7 @@ wsl.exe -d Ubuntu -- bash -lc 'cd /mnt/c/Users/AMD/Documents/00_Development_and_
 
 CORE STATUS — **the shared core already exists and is VERIFIED. Do not rebuild it, and do not edit
 the ported modules.** Verified 2026-09-16: 36 tests green (Windows `pytest`, the project venv on
-numpy 2.4.6, and WSL `unittest`), plus a live `twitch:gaules` capture (64 frames @ 8.1 fps).
+numpy 2.4.6, and WSL `unittest`), plus a live Twitch capture (64 frames @ 8.1 fps).
 **Stay inside the files this brief names.**
 
 WHAT THE CORE GIVES YOU (all in `src/streamkit/`, editable-installed into `.venv`):
@@ -49,7 +49,7 @@ WHAT THE CORE GIVES YOU (all in `src/streamkit/`, editable-installed into `.venv
     the Windows host (`python`, ffmpeg 8.0.1) or in the project venv (`.venv/Scripts/python`,
     streamlink 8.6.1).
   * `render/terminal.py`, `sources/twitch.py` and `sources/ffmpeg_source.py`
-    are verbatim ports of live-in-terminal (hashes matched) — read them, never edit them. One
+    are verbatim ports of stream-in-terminal (hashes matched) — read them, never edit them. One
     documented deviation: `ffmpeg_source.py` sends `-headers` only for http(s) URLs, because ffmpeg
     8.x rejects it for local files.
 
@@ -98,7 +98,7 @@ MECHANISM (already designed — implement this, don't redesign it):
     use their names. `--novel-no-chat` disables it; the chat channel is derived from the source with
     the existing `_chat_channel_from_source()`.
   * **Language.** `--novel-lang` in `pt-BR|en|auto`, default `pt-BR` (the streaming channels this is
-    aimed at, e.g. `gaules`, chat in Portuguese). `auto` = "the dominant language of the chat,
+    aimed at, e.g. `oMeiaUm`, chat in Portuguese). `auto` = "the dominant language of the chat,
     Portuguese if unclear".
   * **Styles.** `--novel-style` in `novel|nature|noir`, default `novel`. Three short system prompts.
   * **Transcript.** Append each finished paragraph to `--out` (default `out/novel/<channel>-<date>.md`,
@@ -136,7 +136,7 @@ REMAINING TASKS:
    (`b6c03f1e`, `bea924ab`, `3005f236`). That is also why the sink must take a *live* snapshot per
    call rather than seek.
 
-   Measured that same day (`gaules`, 640x360): PNGs of 105–198 kB raw → **128–258 kB as base64** per
+   Measured that same day (640x360): PNGs of 105–198 kB raw → **128–258 kB as base64** per
    still, i.e. ≈17 kB/s of upload at one call per 15 s. The frame is legible enough to narrate: the
    sample stills showed a ship on dark water at night, a facecam of a person in a headset, a sponsor
    bug, and a Portuguese in-game clock reading `Sexta-feira, dia 26 / 21:35`. Confirm the same by
@@ -211,8 +211,8 @@ REMAINING TASKS:
      --novel-interval 1 --novel-describer scripted --seconds 10` → report the paragraph count and paste
      two of the scripted paragraphs as proof the loop appends in order;
    - on the Windows host (you may not be able to run this — if so, write the command and say so):
-     `.venv/Scripts/python -m streamkit --source twitch:gaules --size 640x360 --fps 2 --sink novel
-     --novel-interval 15 --novel-style novel --novel-lang pt-BR --out out/novel/gaules.md --seconds 180`
+     `.venv/Scripts/python -m streamkit --source twitch:oMeiaUm --size 640x360 --fps 2 --sink novel
+     --novel-interval 15 --novel-style novel --novel-lang pt-BR --out out/novel/omeiaum.md --seconds 180`
      → report frames captured, real describe-call count, median call latency, and paste the **first 200
      characters of the real transcript**. Never claim a capture you did not make.
 8. README: a short "Novel" section — the mechanism, the flag table, the capture-resolution note (why
@@ -229,7 +229,7 @@ GUARDRAILS:
   keep their exact meaning, and the rest of the test suite must stay green in the same run.
 - The model never sees a key in logs, the transcript, or the status line; `--novel-key` beats the env
   var, and the key is never echoed.
-- Do not edit this plan file. Do not commit. Do not modify `live-in-terminal`.
+- Do not edit this plan file. Do not commit. Do not modify `stream-in-terminal`.
 - If the Task 1 gate fails, that is a FINDING: report the verbatim output and stop. Do not paper over
   generic prose with prompt-tuning theatre, and do not tune prompts silently until a test passes.
 - Honesty: separate "verified offline in WSL" from "needs the Windows host and a key". Report real

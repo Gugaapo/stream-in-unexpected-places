@@ -74,7 +74,7 @@ class Grid:
     def resize(self, width: int, height: int, method: str = "area") -> Grid:
         """Resample to ``width`` x ``height``.
 
-        ``nearest`` reproduces the historical live-in-terminal sampler exactly
+        ``nearest`` reproduces the historical stream-in-terminal sampler exactly
         (``x_src = x * src_w // dst_w``), which keeps the terminal output byte-identical.
         ``area`` is a box-area average — the right default for video, since it does not alias.
         """

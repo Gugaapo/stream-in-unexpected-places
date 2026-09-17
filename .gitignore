@@ -1,14 +1,41 @@
+# Applies to every script under scripts/<script-name>/.
+
+# Python
 __pycache__/
-*.pyc
-.venv/
-venv/
-out/
-local/
-*.mp4
-*.mp4.tmp
-.pytest_cache/
+*.py[cod]
+*$py.class
 *.egg-info/
+*.egg
+.eggs/
 dist/
 build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Test / tooling caches
+.pytest_cache/
+
+# Script output (transcripts, recordings, debug frames, logs)
+out/
+local/
+*.log
+
+# Recordings and clips. A deliberate showcase is force-added, e.g.
+#   git add -f scripts/stream-in-terminal/showcase_omeiaum.mp4
+*.mp4
+*.mp4.tmp
+
+# Secrets
 .env
-.env.local
+.env.*
+!.env.example
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

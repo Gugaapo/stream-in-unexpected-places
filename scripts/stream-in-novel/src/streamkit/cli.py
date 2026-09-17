@@ -1,7 +1,7 @@
 """streamkit CLI — one command for every source/sink combination.
 
     python -m streamkit --source pattern:bars --size 640x360 --sink novel --seconds 30
-    python -m streamkit --source twitch:somechannel --size 640x360 --sink novel_txt --out novel.md
+    python -m streamkit --source twitch:oMeiaUm --size 640x360 --sink novel_txt --out novel.md
 
 Ctrl+C stops cleanly and finalises any open sink.
 """

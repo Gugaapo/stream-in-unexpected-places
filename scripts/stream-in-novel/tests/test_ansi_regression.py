@@ -1,7 +1,7 @@
-"""Fidelity check: the new ansi sink must render byte-identically to live-in-terminal's renderer.
+"""Fidelity check: the ansi sink must render byte-identically to stream-in-terminal's renderer.
 
-This is the strongest evidence that the port is faithful. It reads the sibling repo directly and
-skips (rather than fails) if that repo is not present.
+This is the strongest evidence that the port is faithful. It reads the sibling script
+(`scripts/stream-in-terminal`) directly and skips (rather than fails) if it is not present.
 """
 
 from __future__ import annotations
@@ -17,8 +17,8 @@ SRC = pathlib.Path(__file__).resolve().parents[1] / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-SIBLING_SRC = pathlib.Path(__file__).resolve().parents[2] / "live-in-terminal" / "src"
-HAVE_SIBLING = (SIBLING_SRC / "live_in_terminal" / "render.py").is_file()
+SIBLING_SRC = pathlib.Path(__file__).resolve().parents[2] / "stream-in-terminal" / "src"
+HAVE_SIBLING = (SIBLING_SRC / "stream_in_terminal" / "render.py").is_file()
 
 from streamkit.sinks.ansi import AnsiSink  # noqa: E402
 from streamkit.sources.pattern import PatternSource  # noqa: E402
@@ -30,10 +30,10 @@ DECODE_SIZE = (40, 24)
 def old_renderer():
     if str(SIBLING_SRC) not in sys.path:
         sys.path.insert(0, str(SIBLING_SRC))
-    return importlib.import_module("live_in_terminal.render")
+    return importlib.import_module("stream_in_terminal.render")
 
 
-@unittest.skipUnless(HAVE_SIBLING, "live-in-terminal sibling repo not present")
+@unittest.skipUnless(HAVE_SIBLING, "stream-in-terminal sibling script not present")
 class TestAnsiFidelity(unittest.TestCase):
     def _grids(self, n: int = 3):
         source = PatternSource("square", width=DECODE_SIZE[0], height=DECODE_SIZE[1], fps=6)

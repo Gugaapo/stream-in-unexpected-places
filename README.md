@@ -1,268 +1,111 @@
-# stream-in-unexpected-places — the stream becomes a novel
+# stream in unexpected places
 
-A live Twitch stream, played into a medium it was never meant for: **prose**. Every 15 seconds a
-vision model looks at a still frame, reads the chat, and writes the next two to four sentences of a
-story that is happening right now. The text streams into your terminal as it is written, and the
-whole run is saved as a novel you can read afterwards.
+Play a **live Twitch stream** into a medium it was never meant for. One repository, one script per
+medium — each script self-contained, installable and runnable on its own.
 
-```
-source  ->  Grid  ->  sink
-(twitch,     RGB frame   novel      : ANSI live view (prose pane + chat pane + status)
- file, url,  at a chosen novel_txt  : plain text to stdout/file (pipe-friendly)
- pattern)    resolution  ansi       : the core's terminal pixel-art sink
-                         ppm_seq    : debug sink, one PPM per frame
-```
+Every example in this repository uses the [**oMeiaUm**](https://www.twitch.tv/oMeiaUm) channel.
 
-A stream becomes slow television you *read*. The register is a flag: a literary novel, a nature
-documentary observing a human at a keyboard, or hard-boiled noir.
+## Scripts
 
-Ancestry: this project is an extraction of the **novel** medium from a shared core, which in turn
-grew out of [live-in-terminal](https://github.com/Gugaapo/live-in-terminal). Three modules
-(`render/terminal.py`, `sources/twitch.py`, `sources/ffmpeg_source.py`) are verbatim ports of that
-project — hashes matched, edited only for one documented ffmpeg fix — and a regression test proves
-the terminal renderer still renders byte-identically. The original build brief for this medium is
-kept at `docs/plan-novel.md`.
+| Script | The medium | Needs (beyond Python 3.10+) |
+|--------|-----------|------------------------------|
+| [`scripts/stream-in-terminal`](scripts/stream-in-terminal/) | **Terminal pixel art.** The stream renders as coloured half-blocks with the chat underneath, live in your terminal. | `ffmpeg`, `streamlink` (or `yt-dlp`) |
+| [`scripts/stream-in-novel`](scripts/stream-in-novel/) | **Language.** A vision model reads a still frame every 15 s, reads the chat, and writes the stream as prose — live in your terminal, saved as a novel. | `ffmpeg`, `streamlink`, one vision-model API key |
 
-## Install
+Each script directory contains the script itself and its own README, which explains that medium in
+depth: how it works, install, every flag, real examples, what was verified, and the honest limits.
+
+## Quick start
 
 ```bash
+git clone https://github.com/Gugaapo/stream-in-unexpected-places.git
+cd stream-in-unexpected-places
+```
+
+**The stream as terminal pixel art**
+
+```bash
+cd scripts/stream-in-terminal
 python -m venv .venv
 .venv/Scripts/python -m pip install -e .          # Windows
-# source .venv/bin/activate && pip install -e .   # Linux/WSL
+# source .venv/bin/activate && pip install -e .   # Linux / macOS / WSL
+.venv/Scripts/python -m pip install streamlink
+
+./watch.sh oMeiaUm                                 # Windows: .\watch.ps1 oMeiaUm
 ```
 
-Runtime dependency: **numpy only** (the HTTP client, the PNG encoder and the Twitch IRC client are
-stdlib). `streamlink` (preferred) or `yt-dlp` is needed for Twitch sources, and `ffmpeg` for
-everything except `pattern:` sources. The test suite needs neither.
-
-## Usage
+**The stream as a novel**
 
 ```bash
-# Offline: no key, no network, no ffmpeg — scripted paragraphs so the loop is inspectable
-streamkit --source pattern:noise --size 640x360 --fps 2 --sink novel_txt \
-    --novel-interval 1 --novel-change-threshold 0 --novel-describer scripted \
-    --novel-no-chat --out out/novel/evidence.md --seconds 10 --pace realtime
+cd scripts/stream-in-novel
+python -m venv .venv
+.venv/Scripts/python -m pip install -e .
+.venv/Scripts/python -m pip install streamlink
+echo "DEEPSEEK_API_KEY=your-key-here" > .env       # .env is gitignored
 
-# Live Twitch -> ANSI novel in the terminal
-streamkit --source twitch:gaules --size 640x360 --fps 2 --sink novel \
-    --novel-interval 15 --novel-style novel --novel-lang pt-BR \
-    --out out/novel/gaules.md --seconds 180
-
-# Same run, plain text on stdout (no escapes) instead of the live view
-streamkit --source twitch:gaules --size 640x360 --fps 2 --sink novel_txt \
-    --novel-style noir --out out/novel/gaules.md
-
-streamkit --list-sinks
+PYTHONPATH=src .venv/Scripts/python -m streamkit --source twitch:oMeiaUm --size 640x360 --fps 2 \
+    --sink novel --novel-style novel --novel-lang pt-BR --out out/novel/omeiaum.md
 ```
-
-Source specs:
-
-| Spec | Meaning |
-|------|---------|
-| `pattern:bars\|square\|sweep\|noise` | deterministic synthetic video — no ffmpeg, no network (the test harness) |
-| `file:/path/video.mp4` | local file through ffmpeg |
-| `url:https://...m3u8` | any direct media/HLS URL |
-| `twitch:<channel>` / bare channel / `https://twitch.tv/<channel>` | resolved with streamlink, then yt-dlp |
-
-Reported on exit: `streamkit: 90 frames in 46.62s (1.9 fps) via novel_txt -> out/novel/gaules-live.md`.
-Ctrl+C stops cleanly and finalises the sink (the transcript file is closed and the terminal restored).
-
-### The novel sink
-
-Every `--novel-interval` seconds the sink snapshots the current frame plus the recent Twitch chat,
-asks a vision model for the next 2–4 sentences of a continuing story, streams the prose into the
-terminal (ANSI) or a plain file, and appends a readable markdown transcript under `--out`
-(default `out/novel/<channel>-<date>.md`).
-
-Three design rules make it survivable at 15-second beats:
-
-- **`write(frame)` never blocks.** All model calls happen on a single background worker thread. If a
-  request is still in flight when the next beat is due, the beat is *skipped*, not queued — a late
-  description of an old frame is worthless.
-- **Change gate.** A frame that is nearly identical to the last described one is not sent
-  (`mean_abs_error` below `--novel-change-threshold`) unless chat produced new lines. A static title
-  card must not generate forty paragraphs of filler. This is the single biggest cost lever.
-- **Chat is dialogue, not a ticker.** Chat users are characters: their lines are quoted, by name,
-  inside the prose. `--novel-no-chat` disables it.
-
-**Capture resolution.** The `ansi`/`ppm_seq` sinks want a small grid (~160×48). A vision model cannot
-narrate that — it is a colour blot. Run the novel at `--size 640x360 --fps 2`; that is a per-sink
-consideration, not a change to the core's grid contract.
-
-| Flag | Default | Meaning |
-|------|---------|---------|
-| `--novel-interval` | `15` | Seconds between model calls; skips (does not queue) if a call is in flight |
-| `--novel-change-threshold` | `1.5` | Skip near-identical frames (`mean_abs_error`) unless chat advanced |
-| `--novel-style` | `dumb` | `dumb` (snarky + precise) / `novel` / `nature` / `noir` |
-| `--novel-lang` | `pt-BR` | `pt-BR` / `en` / `auto` (chat-dominant, else Portuguese) |
-| `--novel-no-chat` | off | Disable Twitch chat as dialogue |
-| `--novel-base-url` | DeepSeek | `https://api.deepseek.com` |
-| `--novel-model` | `deepseek-v4-flash-vision-exp` | Any OpenAI-compatible vision model id |
-| `--novel-key` | env / `.env` | Else `$DEEPSEEK_API_KEY` → `$NOVEL_API_KEY` (`.env` loaded automatically) |
-| `--novel-describer` | `openai` | `openai` / `scripted` / `null` (offline / no-key) |
-
-Put the key in a repo-root `.env` (gitignored) — see `.env.example`:
-
-```
-DEEPSEEK_API_KEY=your-key-here
-```
-
-Resolution order: `--novel-key` → process env → `.env` file. Shell env wins over `.env`. With no key
-at all the sink still runs: it degrades to the `null` describer and the live view shows the chat pane
-and a "no describer" notice instead of prose.
-
-The same OpenAI-compatible path works against a local server with no code change:
-
-```bash
-streamkit --source twitch:gaules --size 640x360 --sink novel \
-    --novel-base-url http://127.0.0.1:11434/v1 --novel-model qwen3-vl:8b
-```
-
-Cost, measured on DeepSeek V4-Flash (2026-09-16): ~384 tokens per 640×360 image + ~700 tokens of
-prompt/context in, ~120 out. At one call per 15 s that is ≈ **$0.08/h** off-peak on published rates —
-re-measure on your own account.
 
 ## Layout
 
 ```
-src/streamkit/
-  grid.py                 Grid + resamplers (area = integral/box weights, nearest = legacy)
-  sink.py                 Sink protocol + registry (register/build_sink/registered_sinks)
-  cli.py, __main__.py     the CLI
-  ffmpeg.py               find_ffmpeg(): FFMPEG_PATH -> PATH -> WinGet install dir
-  sources/
-    pattern.py            bars / square / sweep / noise, deterministic, no ffmpeg
-    live.py               TwitchSource, FileSource, UrlSource (Grid adapters over the pipe)
-    twitch.py             PORT of live-in-terminal stream.py (sha256-identical)
-    ffmpeg_source.py      PORT of live-in-terminal ffmpeg_pipe.py (one documented fix, below)
-  describe.py             Describer seam: OpenAI-compat (stdlib urllib + SSE) / scripted / null
-  novel.py                Pure story state + prompts + change gate (no I/O)
-  render/
-    terminal.py           PORT of live-in-terminal render.py (sha256-identical)
-    png.py                Stdlib RGB8 PNG encoder — what the model actually sees (no Pillow)
-  chat.py                 Twitch IRC chat — anonymous justinfan, ported helpers
-  sinks/
-    novel.py              novel (ANSI) / novel_txt (plain) — the medium
-    ansi.py               terminal pixel art (the core's reference sink)
-    ppm_seq.py            one PPM per frame — the debug/verification sink
-tests/                    unittest suite (also green under pytest)
-docs/plan-novel.md        the build brief for this medium, kept as a record
+scripts/
+  stream-in-terminal/          the terminal medium
+    README.md                  the script readme — how it works, install, flags, examples, limits
+    pyproject.toml             its own installable project
+    src/stream_in_terminal/    player, renderer, chat, MP4 recorder
+    watch.sh, watch.ps1        one-command launchers (they check ffmpeg / streamlink for you)
+    showcase_omeiaum.mp4       a real capture, made with this script
+
+  stream-in-novel/             the prose medium
+    README.md                  the script readme
+    pyproject.toml             its own installable project
+    src/streamkit/             source -> Grid -> sink core, plus the novel sink
+    tests/                     50-test unittest suite, runs offline (no ffmpeg, no network, no key)
+    docs/plan-novel.md         the original build brief, kept as a build record
+    .env.example               the API key the sink looks for
+
+LICENSE                        MIT
 ```
 
-Ported files are verbatim copies and must not be edited (their hashes are the fidelity contract).
-The single deviation:
+## Conventions (for the next script)
 
-> `sources/ffmpeg_source.py` — `-headers` is now only passed for `http(s)` inputs. ffmpeg 8.x aborts
-> with `Option headers not found` for local files, which made `file:` sources unusable. The upstream
-> copy still has the unconditional form; do not sync this back blindly.
-
-## Writing another sink
-
-A sink is three methods. Register it and it is immediately usable from the CLI:
-
-```python
-from streamkit.grid import Grid
-from streamkit.sink import register
-
-@register("my_medium")
-class MySink:
-    def __init__(self, *, out_dir: str = "out") -> None:
-        self.out_dir = out_dir
-        self.frames_written = 0
-
-    def open(self, width: int, height: int) -> None:   # called once, dimensions are fixed here
-        self.size = (width, height)
-
-    def write(self, grid: Grid) -> None:               # grid.rgb is uint8 (h, w, 3)
-        grid.resize(320, 240, method="area").save_ppm(f"{self.out_dir}/f{grid.index:05d}.ppm")
-        self.frames_written += 1
-
-    def close(self) -> None:                           # must be idempotent; also runs on error
-        pass
-```
-
-`Grid` helpers: `.rgb` (numpy array), `.rgb_bytes` (RGB24 bytes), `.resize(w, h, method="area"|"nearest")`,
-`.save_ppm(path)`, `.mean_abs_error(other)`, `.index`, `.t`, `.meta`. New sinks must be imported from
-`src/streamkit/sinks/__init__.py` or they never register.
-
-**`method="nearest"` reproduces the historical live-in-terminal sampler exactly** (needed for
-terminal fidelity); `method="area"` is a box-area average and is the right default for video.
+1. **One directory per medium:** `scripts/<script-name>/`.
+2. **Self-contained.** Its own `pyproject.toml`, installable with `pip install -e .`. No shared
+   package to import from a sibling.
+3. **Ship a script readme** (`README.md` inside the script directory): what the medium is, how it
+   works, install steps, a table of every flag, several real examples, the verification evidence,
+   and the honest limits.
+4. **Examples use the `oMeiaUm` channel.**
+5. **Output goes to `out/` and secrets go to `.env`** — both gitignored, at every level.
+6. **Ported code is copied, not linked.** If a script ports code from a sibling, the ported file is a
+   byte-identical copy and a regression test proves it: see
+   `scripts/stream-in-novel/tests/test_ansi_regression.py`, which renders the same frames with its own
+   terminal renderer and with `stream-in-terminal`'s, and asserts the bytes match.
 
 ## Verified
 
-**Test suite — this repo, Windows host 2026-09-17** (python 3.11.8, project venv, numpy 2.4.6,
-streamlink 8.6.1, ffmpeg 8.0.1):
+Both scripts were exercised live against `oMeiaUm` on 2026-09-17 (Windows host, Python 3.11.8,
+ffmpeg 8.0.1, streamlink 8.6.1) — see each script's README for the full output:
 
-```
-$ PYTHONPATH=src .venv/Scripts/python -m unittest discover -s tests -t tests
-Ran 50 tests in 8.528s
+| Script | Evidence |
+|--------|----------|
+| `stream-in-terminal` | 113 frames rendered live at 8 fps (status line + real chat rows), and an h264 `960x432` / 8 fps / 113-frame MP4 recorded with `--record` |
+| `stream-in-novel` | 2.0 fps capture for 60 s → 4 model-written paragraphs in Brazilian Portuguese naming real chat users; plus a `Ran 50 tests … OK` offline suite |
 
-OK
-```
+## Requirements
 
-Everything except one file-source test runs with no ffmpeg, no network and no API key — the
-`pattern:` sources and the `scripted` describer exist for exactly that.
+| Dependency | Role | Needed by |
+|------------|------|-----------|
+| Python 3.10+ | both scripts | all |
+| [ffmpeg](https://ffmpeg.org/) | decode the stream, encode recordings | all |
+| [streamlink](https://streamlink.github.io/) (or [yt-dlp](https://github.com/yt-dlp/yt-dlp)) | resolve the Twitch live URL | all |
+| A vision-model API key (DeepSeek by default) | turn stills into prose | `stream-in-novel` |
 
-**Offline end-to-end (scripted describer), 2026-09-17:**
-
-```
-$ PYTHONPATH=src .venv/Scripts/python -m streamkit --source pattern:noise --size 640x360 --fps 2 \
-      --sink novel_txt --novel-interval 1 --novel-change-threshold 0 --novel-describer scripted \
-      --novel-no-chat --out out/novel/evidence-scripted.md --seconds 10 --pace realtime
-streamkit: 20 frames in 9.55s (2.1 fps) via novel_txt -> out\novel\evidence-scripted.md
-```
-
-```
-# novel - pattern:noise
-style: dumb | lang: pt-BR | started: 2026-09-17T11:24:55
-
-Bars of colour marched across the void like a parade with nowhere to go.
-Someone in chat whispered a name, and the parade hesitated - then marched on.
-...
-```
-
-**Live Twitch, real model calls — this repo, 2026-09-17 11:25 -04:00, channel `gaules`:**
-
-```
-$ PYTHONPATH=src .venv/Scripts/python -m streamkit --source twitch:gaules --size 640x360 --fps 2 \
-      --sink novel_txt --novel-interval 15 --novel-style novel --novel-lang pt-BR \
-      --novel-no-chat --out out/novel/gaules-live.md --seconds 45
-streamkit: 90 frames in 46.62s (1.9 fps) via novel_txt -> out\novel\gaules-live.md
-```
-
-Three real describe calls in 45 s produced this (first 200 characters of the transcript, pt-BR,
-`--novel-style novel`):
-
-> "A tela do mapa se estendia em tons de verde e cinza, com exércitos e territórios delineados por
-> fronteiras finas, enquanto o painel de informações listava em português as condições de uma nação
-> inimiga."
-
-The model read a strategy-game map plus the streamer's facecam, in the language of the panel and the
-chat, from a 640×360 still — not mush. Earlier gate, same host (2026-09-16, Gemini 3.6 Flash): three
-stills from one live connection, spaced by real wall-clock time, were all narratable.
-
-Honest limit: the prose is only as good as a 640×360 still every 15 s plus eight chat lines. Silence
-in chat and a static scene produce a stalled story — that is the change gate working, not a bug.
-
-## Environment gotchas (cost real time)
-
-- **WSL may have no ffmpeg, no Pillow, no streamlink and no pytest.** Hence: tests are `unittest`-style
-  (they run under both `pytest` and `unittest discover`), the synthetic `pattern:` sources need no
-  ffmpeg, and debug frames are PPM (stdlib) rather than PNG. Live runs happen on a host that has
-  ffmpeg + streamlink and a normal terminal.
-- **`build_sink(sink_name, **options)`** — the first parameter is not called `name`, because sinks
-  take their own `name` option (default output filename).
-- **ffmpeg 8.x rejects `-headers` for non-HTTP inputs** (see the deviation note above).
-- **DeepSeek V4 defaults to thinking**: with a small `max_tokens` budget the whole reply lands in
-  `reasoning_content` and the visible content is empty, so the request sends
-  `thinking: {type: disabled}`. `reasoning_content` deltas are ignored on the way back.
-- **HTTP 429 needs a long cool-down.** The sink backs off 60 s on a rate-limit instead of retrying
-  every 15 s and burning quota; other transport errors just pause the story.
-- Realtime pacing is the CLI default; `--pace fast` is for tests, where a run's file duration comes
-  from metadata (`frames / fps`) rather than wall time.
-- If a Twitch channel is offline you get a one-line `error: Stream offline or not found ...` and exit
-  code 2 — not a stack trace.
+No Twitch API key is needed: public live streams are resolved anonymously, and chat is read over
+anonymous IRC.
 
 ## License
 
-MIT — see `LICENSE`.
+MIT — see [LICENSE](LICENSE).

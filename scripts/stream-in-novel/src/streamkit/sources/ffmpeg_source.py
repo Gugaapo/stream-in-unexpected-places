@@ -1,7 +1,7 @@
 """
 Spawn ffmpeg to decode a stream into raw RGB24 frames.
 
-Ported from live-in-terminal's ffmpeg_pipe.py (sha256-identical apart from one documented
+Ported from stream-in-terminal's ffmpeg_pipe.py (sha256-identical apart from one documented
 fix: -headers is only sent for http(s) inputs, because ffmpeg 8.x rejects it for local files).
 """
 
@@ -130,8 +130,8 @@ def open_rgb_pipe(
 
     # LOCAL DEVIATION FROM THE VERBATIM PORT (2026-09-16): ffmpeg 8.x fails with
     # "Option headers not found" when -headers is passed for a non-HTTP input, which made the
-    # `file:` source unusable. -headers is now only applied to http(s) inputs. (The upstream
-    # live-in-terminal copy still has the unconditional form; do not "sync" this back blindly.)
+    # `file:` source unusable. -headers is now only applied to http(s) inputs. (The sibling
+    # stream-in-terminal copy still has the unconditional form; do not "sync" this back blindly.)
     cmd = [
         ffmpeg_path,
         "-hide_banner",

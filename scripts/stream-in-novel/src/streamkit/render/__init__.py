@@ -1,6 +1,6 @@
 """Renderer subpackage.
 
-``terminal`` is a VERBATIM port of ``live-in-terminal/src/live_in_terminal/render.py``
+``terminal`` is a VERBATIM port of ``scripts/stream-in-terminal/src/stream_in_terminal/render.py``
 (sha256-identical, 2026-09-16) — do not edit it, or the ANSI regression test loses its meaning.
 """
 
