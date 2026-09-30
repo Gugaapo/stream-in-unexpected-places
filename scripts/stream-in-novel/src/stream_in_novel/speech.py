@@ -76,7 +76,15 @@ class MeiaUmSpeech:
 
     def latest(self, limit: int = 8) -> list[SpeechLine]:
         query = f"{self.url}?limit={int(limit)}"
-        req = urllib.request.Request(query, method="GET", headers={"Accept": "application/json"})
+        req = urllib.request.Request(
+            query,
+            method="GET",
+            headers={
+                "Accept": "application/json",
+                # The API answers 403 to urllib's default agent.
+                "User-Agent": "stream-in-novel",
+            },
+        )
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                 payload = json.loads(resp.read().decode("utf-8"))

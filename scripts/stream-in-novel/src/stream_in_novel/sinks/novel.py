@@ -255,6 +255,17 @@ class _NovelEngine:
         with self._lock:
             return list(self._speech_lines)
 
+    def _spoken_for_prompt(self, speech: list[SpeechLine]) -> list[tuple[str, str]] | None:
+        """Lines for the prompt. A failed poll is unknown, not silence."""
+        if self._speech is None:
+            return None
+        status = self._speech_status
+        if status.startswith("speech HTTP") or status.startswith("speech down") or status.startswith(
+            "speech connecting"
+        ):
+            return None
+        return [(line.speaker, line.text) for line in speech]
+
     # ----- write path (non-blocking) ----------------------------------------
     def on_frame(self, grid: Grid) -> None:
         self.frames_written += 1
@@ -334,7 +345,7 @@ class _NovelEngine:
                     self._last_speech_id = speech[-1].id
             return
 
-        spoken = [(line.speaker, line.text) for line in speech] if self._speech else None
+        spoken = self._spoken_for_prompt(speech)
         system, user = build_prompt(
             self.state,
             chat,

@@ -2,12 +2,25 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from streamkit.grid import Grid
 
 STYLES = ("dumb", "novel", "nature", "noir")
 LANGS = ("pt-BR", "en", "auto")
+_DIARIZATION_ID = re.compile(r"^falante[_\s-]?\d+$", re.IGNORECASE)
+_DIARIZATION_TOKEN = re.compile(r"falante[_\s-]?\d+", re.IGNORECASE)
+_ANON_VOICES = ("someone else", "a second voice", "a third voice")
+_OMEIAUM = frozenset({"omeiaum", "meiaum"})
+_OMEIAUM_BRIEF = (
+    "Scene brief for this channel: MeiaUm is the streamer and the person always on camera. "
+    "Write his name as MeiaUm. He is running an uncapped subathon, so the stream has no fixed end. "
+    "The stream title states the current day of the subathon. "
+    "A timer is always on screen and shows when the stream will end: it is remaining time counting down, "
+    "not a score, not a record, and not how long he has already been live. "
+    "Mention a day number or a timer value only when that text is clearly readable. Do not invent either."
+)
 
 _STYLE_SYSTEM = {
     "dumb": (
@@ -43,7 +56,7 @@ _LANG_RULE = {
 _COMMON_RULES = (
     "Continue the story; never restate what was already written. Write 2–4 sentences only. "
     "GROUNDING (anti-hallucination) — mandatory: "
-    "Only describe what is visible in the still or stated in the chat block below. "
+    "Only describe what is visible in the still, stated in the chat block, or given in the scene brief. "
     "Never invent people, display names, chatters, dialogue, UI text, scores, errors, or events. "
     "Never invent a name (e.g. do not invent 'Falko'); if a person is unnamed on screen, say "
     "'the streamer' / 'someone on screen', not a made-up name. "
@@ -59,7 +72,8 @@ _COMMON_RULES = (
     "Only use usernames that appear in the chat block. "
     "Spoken words come only from the speech-transcript block. If that block is missing or empty, "
     "do not invent dialogue, quotes, or what anyone said out loud. "
-    "Labels like falante_2 are diarization ids, not real names — do not turn them into a person. "
+    "In that block, 'streamer' is the channel owner. Any other voice is an unidentified person: "
+    "refer to them only as someone else, never give them a name, and never write a speaker id. "
     "Never mention images, cameras, screenshots, AI, models, timestamps, pixels, or other "
     "technical terms. Do not describe UI chrome as 'a menu' in meta terms — narrate the scene."
 )
@@ -120,6 +134,7 @@ def build_prompt(
             _LANG_RULE[lang_key],
             _COMMON_RULES,
             f"The channel / streamer login is '{channel_name}'.",
+            *([_OMEIAUM_BRIEF] if channel_name in _OMEIAUM else []),
         ]
     )
 
@@ -128,7 +143,7 @@ def build_prompt(
     if tail:
         parts.append("Previous paragraphs (continue from here; do not repeat):")
         for p in tail:
-            parts.append(p)
+            parts.append(_scrub_diarization(p))
     else:
         parts.append("This is the opening of the chapter. Begin the story from the scene.")
 
@@ -144,11 +159,11 @@ def build_prompt(
     else:
         parts.append("No chat lines this beat.")
 
-    spoken = _normalise_speech(speech_lines)
+    spoken = _speech_for_prompt(speech_lines, channel_name)
     if spoken:
         parts.append(
-            "Speech transcript (oMeiaUm public API; quote only these lines; "
-            "falante_N is a diarization label, not a name):"
+            "Speech transcript (quote only these lines; "
+            "'streamer' is the channel owner; other labels are not names):"
         )
         for speaker, text in spoken[-8:]:
             parts.append(f"- {speaker}: {text}")
@@ -157,6 +172,41 @@ def build_prompt(
 
     parts.append("Continue. Stay grounded — invent nothing.")
     return system, "\n".join(parts)
+
+
+def _is_host_speaker(speaker: str, channel: str) -> bool:
+    raw = (speaker or "").strip()
+    if is_streamer_user(raw, channel):
+        return True
+    compact = re.sub(r"[\s_]+", "", raw.lower())
+    return compact in {"meiaum", "omeiaum"}
+
+
+def _scrub_diarization(text: str) -> str:
+    """Drop speaker ids that an earlier paragraph already echoed."""
+    return _DIARIZATION_TOKEN.sub("someone else", text)
+
+
+def _speech_for_prompt(
+    speech_lines: list[tuple[str, str]] | None,
+    channel: str,
+) -> list[tuple[str, str]]:
+    """Speaker labels safe to show a model. Diarization ids never appear."""
+    anon_for: dict[str, str] = {}
+    out: list[tuple[str, str]] = []
+    for speaker, text in _normalise_speech(speech_lines):
+        if _is_host_speaker(speaker, channel):
+            label = "streamer"
+        elif _DIARIZATION_ID.match(speaker) or speaker.lower() == "unknown":
+            key = speaker.lower()
+            if key not in anon_for:
+                idx = len(anon_for)
+                anon_for[key] = _ANON_VOICES[idx] if idx < len(_ANON_VOICES) else "another voice"
+            label = anon_for[key]
+        else:
+            label = speaker
+        out.append((label, text))
+    return out
 
 
 def _normalise_speech(

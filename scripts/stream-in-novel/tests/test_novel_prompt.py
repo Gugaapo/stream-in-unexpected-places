@@ -80,18 +80,41 @@ class TestNovelPrompt(unittest.TestCase):
 
     def test_speech_lines_are_the_only_allowed_quotes(self) -> None:
         state = StoryState()
-        _, user = build_prompt(
+        system, user = build_prompt(
             state,
             [],
             "dumb",
             "pt-BR",
             "omeiaum",
-            speech_lines=[("falante_2", "Olha lá.")],
+            speech_lines=[
+                ("falante_2", "Olha lá."),
+                ("MeiaUm", "É o correspondente."),
+                ("falante_3", "Vai, vai."),
+            ],
         )
-        self.assertIn("falante_2: Olha lá.", user)
+        self.assertIn("someone else: Olha lá.", user)
+        self.assertIn("streamer: É o correspondente.", user)
+        self.assertIn("a second voice: Vai, vai.", user)
+        self.assertNotIn("falante", user.lower())
+        self.assertNotIn("falante", system.lower())
         self.assertIn("quote only these lines", user)
         _, empty = build_prompt(state, [], "dumb", "pt-BR", "omeiaum", speech_lines=[])
         self.assertIn("No spoken lines this beat. Do not invent speech.", empty)
+
+        state.add("O falante_2 gritou vai.")
+        _, continued = build_prompt(state, [], "dumb", "pt-BR", "omeiaum", speech_lines=None)
+        self.assertNotIn("falante", continued.lower())
+        self.assertIn("someone else", continued)
+
+    def test_omeiaum_subathon_brief_is_channel_specific(self) -> None:
+        state = StoryState()
+        system, _ = build_prompt(state, [], "dumb", "pt-BR", "twitch:omeiaum")
+        self.assertIn("MeiaUm", system)
+        self.assertIn("uncapped subathon", system)
+        self.assertIn("remaining time counting down", system)
+        self.assertIn("current day of the subathon", system)
+        other, _ = build_prompt(state, [], "dumb", "pt-BR", "gaules")
+        self.assertNotIn("subathon", other)
 
 
 if __name__ == "__main__":
