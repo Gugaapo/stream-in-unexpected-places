@@ -78,6 +78,21 @@ class TestNovelPrompt(unittest.TestCase):
         self.assertIn("[CHAT] Alice: hi", user)
         self.assertNotIn("Falko", user)
 
+    def test_speech_lines_are_the_only_allowed_quotes(self) -> None:
+        state = StoryState()
+        _, user = build_prompt(
+            state,
+            [],
+            "dumb",
+            "pt-BR",
+            "omeiaum",
+            speech_lines=[("falante_2", "Olha lá.")],
+        )
+        self.assertIn("falante_2: Olha lá.", user)
+        self.assertIn("quote only these lines", user)
+        _, empty = build_prompt(state, [], "dumb", "pt-BR", "omeiaum", speech_lines=[])
+        self.assertIn("No spoken lines this beat. Do not invent speech.", empty)
+
 
 if __name__ == "__main__":
     unittest.main()

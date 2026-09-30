@@ -35,6 +35,7 @@ from streamkit.render.png import png_bytes
 from streamkit.sink import register
 
 from ..novel import StoryState, build_prompt, should_describe
+from ..speech import MeiaUmSpeech, SpeechLine, speech_enabled
 
 ALT_ENTER = "\x1b[?1049h"
 ALT_LEAVE = "\x1b[?1049l"
@@ -96,6 +97,7 @@ class _NovelEngine:
         describer: str | Describer | None = "openai",
         color: bool = True,
         label: str = "",
+        speech: str = "auto",
     ) -> None:
         self.interval = max(0.0, float(interval))
         self.change_threshold = float(change_threshold)
@@ -105,6 +107,13 @@ class _NovelEngine:
         self._chat_channel = None if no_chat else chat_channel
         self.color = bool(color)
         self.label = label or (chat_channel or "stream")
+        self._speech_mode = speech
+        self._speech: MeiaUmSpeech | None = None
+        self._speech_lines: list[SpeechLine] = []
+        self._speech_status = "speech off"
+        self._speech_stop = threading.Event()
+        self._speech_thread: threading.Thread | None = None
+        self._last_speech_id: int | None = None
 
         self.out_path = Path(out_path) if out_path else _default_out_path(chat_channel)
         self.state = StoryState()
@@ -168,6 +177,14 @@ class _NovelEngine:
         if self._chat_channel:
             self._chat = TwitchChat(self._chat_channel, max_messages=24)
             self._chat.start()
+        if speech_enabled(self._speech_mode, self._chat_channel or self.label):
+            self._speech = MeiaUmSpeech()
+            self._speech_status = "speech connecting…"
+            self._speech_stop.clear()
+            self._speech_thread = threading.Thread(
+                target=self._poll_speech, name="novel-speech", daemon=True
+            )
+            self._speech_thread.start()
         self._ensure_header()
 
     def close(self) -> None:
@@ -181,6 +198,7 @@ class _NovelEngine:
                 if not self._busy:
                     break
             time.sleep(0.05)
+        self._speech_stop.set()
         if self._chat is not None:
             self._chat.stop()
             self._chat = None
@@ -222,6 +240,21 @@ class _NovelEngine:
             return "no chat"
         return self._chat.status
 
+    def _poll_speech(self) -> None:
+        """Background poll. write() only reads the cached lines."""
+        while not self._speech_stop.is_set():
+            client = self._speech
+            if client is not None:
+                lines = client.latest(limit=8)
+                with self._lock:
+                    self._speech_lines = lines
+                    self._speech_status = client.status
+            self._speech_stop.wait(5.0)
+
+    def _speech_snapshot(self) -> list[SpeechLine]:
+        with self._lock:
+            return list(self._speech_lines)
+
     # ----- write path (non-blocking) ----------------------------------------
     def on_frame(self, grid: Grid) -> None:
         self.frames_written += 1
@@ -239,18 +272,34 @@ class _NovelEngine:
             return
 
         chat = self._chat_pairs()
+        speech = self._speech_snapshot()
+        speech_id = speech[-1].id if speech else None
         with self._lock:
             prev = self._last_described
             last_n = self._last_chat_count
-        if not should_describe(prev, grid, chat, last_n, self.change_threshold):
+            last_speech = self._last_speech_id
+        if not should_describe(
+            prev,
+            grid,
+            chat,
+            last_n,
+            self.change_threshold,
+            speech_id=speech_id,
+            last_speech_id=last_speech,
+        ):
             self.skips_gate += 1
             with self._lock:
                 self._next_due = time.monotonic() + self.interval
             return
 
-        self._spawn_worker(grid.copy(), chat)
+        self._spawn_worker(grid.copy(), chat, speech)
 
-    def _spawn_worker(self, grid: Grid, chat: list[tuple[str, str]]) -> None:
+    def _spawn_worker(
+        self,
+        grid: Grid,
+        chat: list[tuple[str, str]],
+        speech: list[SpeechLine],
+    ) -> None:
         with self._lock:
             if self._busy or self._closed:
                 return
@@ -260,7 +309,7 @@ class _NovelEngine:
 
         def run() -> None:
             try:
-                self._describe_once(grid, chat)
+                self._describe_once(grid, chat, speech)
             finally:
                 with self._lock:
                     self._busy = False
@@ -269,20 +318,30 @@ class _NovelEngine:
         self._worker = t
         t.start()
 
-    def _describe_once(self, grid: Grid, chat: list[tuple[str, str]]) -> None:
+    def _describe_once(
+        self,
+        grid: Grid,
+        chat: list[tuple[str, str]],
+        speech: list[SpeechLine] | None = None,
+    ) -> None:
+        speech = speech or []
         if isinstance(self.describer, NullDescriber):
             with self._lock:
                 self._status_extra = self._status_extra or "no describer"
                 self._last_described = grid
                 self._last_chat_count = len(chat)
+                if speech:
+                    self._last_speech_id = speech[-1].id
             return
 
+        spoken = [(line.speaker, line.text) for line in speech] if self._speech else None
         system, user = build_prompt(
             self.state,
             chat,
             self.style,
             self.lang,
             self._chat_channel or self.label,
+            speech_lines=spoken,
         )
         try:
             png = png_bytes(grid.rgb_bytes, grid.width, grid.height)
@@ -317,6 +376,8 @@ class _NovelEngine:
             self._last_call_at = time.monotonic()
             self._last_described = grid
             self._last_chat_count = len(chat)
+            if speech:
+                self._last_speech_id = speech[-1].id
             self._streaming_text = text
             self.last_error = ""
             if not isinstance(self.describer, NullDescriber):
@@ -350,6 +411,7 @@ class _NovelEngine:
             f"calls={self.calls_made}",
             f"next={self.seconds_to_next():.0f}s",
             self._chat_status(),
+            self._speech_status,
         ]
         if self.in_flight():
             bits.append("describing…")
@@ -379,6 +441,7 @@ class NovelTxtSink:
         describer: str | Describer | None = "openai",
         color: bool = True,
         label: str = "",
+        speech: str = "auto",
         stream: TextIO | None = None,
         **_kwargs,
     ) -> None:
@@ -397,6 +460,7 @@ class NovelTxtSink:
             describer=describer,
             color=color,
             label=label,
+            speech=speech,
         )
         self._stream = stream if stream is not None else sys.stdout
         self._last_printed = 0
@@ -455,6 +519,7 @@ class NovelAnsiSink:
         describer: str | Describer | None = "openai",
         color: bool = True,
         label: str = "",
+        speech: str = "auto",
         stream: TextIO | None = None,
         **_kwargs,
     ) -> None:
@@ -473,6 +538,7 @@ class NovelAnsiSink:
             describer=describer,
             color=color,
             label=label,
+            speech=speech,
         )
         self._stream = stream if stream is not None else sys.stdout
         self.color = bool(color)

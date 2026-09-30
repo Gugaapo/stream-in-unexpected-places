@@ -57,6 +57,9 @@ _COMMON_RULES = (
     "not as a random viewer. "
     "[CHAT] lines are other viewers — quote them by their exact username only. "
     "Only use usernames that appear in the chat block. "
+    "Spoken words come only from the speech-transcript block. If that block is missing or empty, "
+    "do not invent dialogue, quotes, or what anyone said out loud. "
+    "Labels like falante_2 are diarization ids, not real names — do not turn them into a person. "
     "Never mention images, cameras, screenshots, AI, models, timestamps, pixels, or other "
     "technical terms. Do not describe UI chrome as 'a menu' in meta terms — narrate the scene."
 )
@@ -104,6 +107,7 @@ def build_prompt(
     style: str,
     lang: str,
     channel: str,
+    speech_lines: list[tuple[str, str]] | None = None,
 ) -> tuple[str, str]:
     """Return ``(system, user)`` prompt pair for the describer."""
     style_key = style if style in _STYLE_SYSTEM else "dumb"
@@ -140,8 +144,33 @@ def build_prompt(
     else:
         parts.append("No chat lines this beat.")
 
+    spoken = _normalise_speech(speech_lines)
+    if spoken:
+        parts.append(
+            "Speech transcript (oMeiaUm public API; quote only these lines; "
+            "falante_N is a diarization label, not a name):"
+        )
+        for speaker, text in spoken[-8:]:
+            parts.append(f"- {speaker}: {text}")
+    elif speech_lines is not None:
+        parts.append("No spoken lines this beat. Do not invent speech.")
+
     parts.append("Continue. Stay grounded — invent nothing.")
     return system, "\n".join(parts)
+
+
+def _normalise_speech(
+    speech_lines: list[tuple[str, str]] | None,
+) -> list[tuple[str, str]]:
+    out: list[tuple[str, str]] = []
+    for item in speech_lines or []:
+        if isinstance(item, tuple) and len(item) >= 2:
+            speaker, text = str(item[0]).strip(), str(item[1]).strip()
+        else:
+            speaker, text = "unknown", str(item).strip()
+        if text:
+            out.append((speaker or "unknown", text))
+    return out
 
 
 def _normalise_chat(
@@ -171,8 +200,12 @@ def should_describe(
     chat_lines: list,
     last_chat_count: int,
     threshold: float,
+    speech_id: int | None = None,
+    last_speech_id: int | None = None,
 ) -> bool:
-    """Change gate: skip near-identical frames unless chat produced new lines."""
+    """Change gate: skip near-identical frames unless chat or speech advanced."""
+    if speech_id is not None and speech_id != last_speech_id:
+        return True
     chat_n = len(chat_lines or [])
     if chat_n > last_chat_count:
         return True

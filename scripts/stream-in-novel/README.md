@@ -79,11 +79,16 @@ Three design rules make it survivable at 15-second beats:
   request is still in flight when the next beat is due, the beat is *skipped*, not queued — a late
   description of an old frame is worthless.
 - **Change gate.** A frame that is nearly identical to the last described one is not sent
-  (`mean_abs_error` below `--novel-change-threshold`) unless chat produced new lines. A static title
-  card must not generate forty paragraphs of filler. This is the single biggest cost lever.
+  (`mean_abs_error` below `--novel-change-threshold`) unless chat produced new lines or the
+  oMeiaUm transcript advanced. A static title card must not generate forty paragraphs of filler.
+  This is the single biggest cost lever.
 - **Chat is dialogue, not a ticker.** Chat users are characters: their lines are quoted, by name,
   inside the prose, and the channel owner is tagged as the streamer rather than as a viewer.
   `--novel-no-chat` disables it.
+- **Spoken words come from the oMeiaUm transcript.** On `twitch:omeiaum` (or `--novel-speech meiaum`)
+  the sink polls the public [transcription API](https://meiaum.vinnytasso.com.br/developers/transcription)
+  in the background and those lines are the only allowed quotes. Labels like `falante_2` stay
+  diarization ids. Other channels leave speech off. `--novel-speech off` disables it.
 
 **Capture resolution.** The terminal medium plays at ~160×48. A vision model cannot narrate that — it
 is a colour blot — so this medium runs at `--size 640x360 --fps 2`. That is a per-medium decision, not
@@ -94,10 +99,11 @@ a library change.
 | Flag | Default | Meaning |
 |------|---------|---------|
 | `--novel-interval` | `15` | Seconds between model calls; skips (does not queue) if a call is in flight |
-| `--novel-change-threshold` | `1.5` | Skip near-identical frames (`mean_abs_error`) unless chat advanced |
+| `--novel-change-threshold` | `1.5` | Skip near-identical frames (`mean_abs_error`) unless chat or speech advanced |
 | `--novel-style` | `dumb` | `dumb` (snarky + precise) / `novel` / `nature` / `noir` |
 | `--novel-lang` | `pt-BR` | `pt-BR` / `en` / `auto` (chat-dominant, else Portuguese) |
 | `--novel-no-chat` | off | Disable Twitch chat as dialogue |
+| `--novel-speech` | `auto` | oMeiaUm transcript as speech context (`auto` / `meiaum` / `off`) |
 | `--novel-base-url` | DeepSeek | `https://api.deepseek.com` |
 | `--novel-model` | `deepseek-v4-flash-vision-exp` | Any OpenAI-compatible vision model id |
 | `--novel-key` | env / `.env` | Else `$DEEPSEEK_API_KEY` → `$NOVEL_API_KEY` (`.env` loaded automatically) |
@@ -133,6 +139,7 @@ re-measure on your own account.
 ```
 src/stream_in_novel/
   novel.py              the story: state, style/language prompts, the change gate (pure, no I/O)
+  speech.py             oMeiaUm live transcript client (public API, no key)
   sinks/novel.py        the medium: novel (ANSI live view) / novel_txt (plain text)
   cli.py, __main__.py   this medium's CLI (core flags + --novel-*), and the entry point
 tests/                  10 offline tests: prompt assembly, the gate, non-blocking writes, transcript

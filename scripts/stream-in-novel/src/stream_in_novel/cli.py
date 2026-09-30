@@ -41,6 +41,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--novel-lang", choices=LANGS, default="pt-BR",
                    help="output language (default pt-BR)")
     p.add_argument("--novel-no-chat", action="store_true", help="ignore Twitch chat")
+    p.add_argument("--novel-speech", choices=("auto", "meiaum", "off"), default="auto",
+                   help="oMeiaUm live transcript as speech context (auto = omeiaum channel only)")
     p.add_argument("--novel-base-url", default=DEFAULT_BASE_URL,
                    help=f"OpenAI-compatible base URL (default {DEFAULT_BASE_URL})")
     p.add_argument("--novel-model", default=DEFAULT_MODEL,
@@ -67,6 +69,7 @@ def sink_kwargs(args: argparse.Namespace, source: Source) -> dict:
         "model": args.novel_model,
         "api_key": args.novel_key,
         "describer": args.novel_describer,
+        "speech": args.novel_speech,
         "label": source.name,
     }
 
